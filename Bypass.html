@@ -1,0 +1,762 @@
+
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextExtractor Pro - ระบบดึงข้อความจากไฟล์</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts (Kanit & Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- PDF.js for PDF extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Mammoth.js for DOCX extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- Tesseract.js for Image OCR -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Kanit', 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .drag-active {
+            border-color: #6366f1 !important;
+            background-color: rgba(99, 102, 241, 0.1) !important;
+        }
+        /* Touch optimization */
+        button, select, input, textarea {
+            touch-action: manipulation;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col min-h-screen justify-between bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+
+    <!-- Toast Notification Container (Mobile Responsive Position) -->
+    <div id="toastContainer" class="fixed top-4 inset-x-4 sm:inset-x-auto sm:right-5 sm:w-80 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Custom Confirmation Modal (No native confirm/alert) -->
+    <div id="confirmModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4 transition-opacity duration-200">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl transform transition-transform duration-200 scale-95" id="modalBox">
+            <div class="flex items-center gap-3 text-rose-400 mb-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-lg">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-base font-semibold text-white">ยืนยันการล้างข้อความ</h3>
+            </div>
+            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-5">
+                คุณแน่ใจหรือไม่ว่าต้องการล้างข้อความทั้งหมดในกล่องข้อความ? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </p>
+            <div class="flex items-center justify-end gap-2">
+                <button id="modalBtnCancel" class="px-4 py-2 text-xs sm:text-sm font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors">
+                    ยกเลิก
+                </button>
+                <button id="modalBtnConfirm" class="px-4 py-2 text-xs sm:text-sm font-medium rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition-colors shadow-lg shadow-rose-600/30">
+                    ยืนยันการลบ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="flex-grow flex flex-col max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+
+        <!-- Header -->
+        <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 sm:pb-6 border-b border-slate-800 mb-4 sm:mb-6">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-xl sm:text-2xl shadow-lg shadow-indigo-500/10 flex-shrink-0">
+                    <i class="fa-solid fa-file-contract"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                        TextExtractor <span class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">PRO</span>
+                    </h1>
+                    <p class="text-xs sm:text-sm text-slate-400">ถอดข้อความจากไฟล์เอกสาร (.txt, .pdf, .docx, .csv) และรูปภาพ (OCR)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] sm:text-xs text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl w-full sm:w-auto justify-center sm:justify-start">
+                <i class="fa-solid fa-shield-halved text-emerald-400"></i>
+                <span>ประมวลผลบนเครื่อง 100% ปลอดภัยต่อข้อมูล</span>
+            </div>
+        </header>
+
+        <!-- Dropzone / Upload Area -->
+        <section class="mb-4 sm:mb-6">
+            <div id="dropzone" class="relative group border-2 border-dashed border-slate-700 hover:border-indigo-500 active:border-indigo-500 bg-slate-900/60 active:bg-slate-900/90 hover:bg-slate-900 transition-all duration-200 rounded-2xl p-5 sm:p-8 text-center cursor-pointer shadow-inner">
+                <input type="file" id="fileInput" class="hidden" accept=".txt,.md,.csv,.json,.html,.css,.js,.py,.pdf,.docx,.png,.jpg,.jpeg,.webp" multiple>
+                
+                <div class="flex flex-col items-center justify-center gap-3 sm:gap-4">
+                    <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-slate-800 group-hover:scale-105 group-hover:bg-indigo-600/20 transition-all duration-200 flex items-center justify-center text-slate-400 group-hover:text-indigo-400 text-2xl sm:text-3xl shadow-lg">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm sm:text-base font-medium text-slate-200 leading-snug">
+                            <span class="text-indigo-400 font-semibold underline underline-offset-4">แตะเพื่อเลือกไฟล์</span> หรือลากไฟล์มาวาง
+                        </p>
+                        <p class="text-[11px] sm:text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                            รองรับ TXT, PDF, Word, CSV, Code และรูปภาพ (OCR แปลงภาพถ่าย/เอกสารเป็นข้อความ)
+                        </p>
+                    </div>
+
+                    <!-- Badges -->
+                    <div class="flex flex-wrap justify-center gap-1.5 sm:gap-2 mt-1">
+                        <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700"><i class="fa-regular fa-file-lines mr-1 text-sky-400"></i>TXT / Code</span>
+                        <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700"><i class="fa-regular fa-file-pdf mr-1 text-rose-400"></i>PDF</span>
+                        <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700"><i class="fa-regular fa-file-word mr-1 text-blue-400"></i>DOCX</span>
+                        <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700"><i class="fa-regular fa-file-image mr-1 text-emerald-400"></i>OCR ภาพ</span>
+                        <span class="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-indigo-950 text-indigo-300 border border-indigo-800/80"><i class="fa-solid fa-layer-group mr-1 text-indigo-400"></i>เลือกหลายไฟล์ได้</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading / Progress Indicator -->
+        <div id="loader" class="hidden mb-4 sm:mb-6 bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-lg">
+            <div class="flex items-center justify-between mb-2">
+                <span id="loaderStatus" class="text-xs sm:text-sm font-medium text-indigo-400 flex items-center gap-2 truncate pr-2">
+                    <i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผลไฟล์...
+                </span>
+                <span id="loaderPercent" class="text-xs font-semibold text-slate-400 flex-shrink-0">0%</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div id="progressBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-200" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Mobile View Navigation Tabs (Shown on screens < lg) -->
+        <div class="lg:hidden flex items-center p-1 bg-slate-900 border border-slate-800 rounded-xl mb-3 gap-1">
+            <button id="tabBtnEditor" class="flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-indigo-600 text-white transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-align-left"></i> กล่องข้อความ
+            </button>
+            <button id="tabBtnDetails" class="flex-1 py-2 px-3 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-chart-pie"></i> สถิติ & รายการไฟล์
+            </button>
+        </div>
+
+        <!-- Main Workspace -->
+        <div id="workspace" class="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 flex-grow">
+            
+            <!-- Left & Center: Text Editor & Output Area (3 cols) -->
+            <div id="editorPane" class="lg:col-span-3 flex flex-col gap-3 sm:gap-4">
+                
+                <!-- Action Controls Toolbar -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shadow-md">
+                    
+                    <!-- Search Bar & Header Switch -->
+                    <div class="flex items-center gap-2 flex-grow">
+                        <div class="relative flex-grow">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                            <input type="text" id="searchInput" placeholder="ค้นหาข้อความ..." class="w-full pl-8 pr-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500 transition-colors">
+                        </div>
+
+                        <!-- Header Options Switcher -->
+                        <div class="flex items-center bg-slate-950 px-2.5 py-2 rounded-lg border border-slate-800 flex-shrink-0">
+                            <label class="inline-flex items-center cursor-pointer select-none">
+                                <input type="checkbox" id="chkIncludeHeader" class="sr-only peer" checked>
+                                <div class="relative w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <span class="ms-1.5 text-[11px] font-medium text-slate-300 whitespace-nowrap">ใส่ชื่อไฟล์</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap items-center gap-1.5 justify-end">
+                        <button id="btnCopy" class="min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white transition-all flex items-center gap-1.5 shadow-sm active:scale-95">
+                            <i class="fa-regular fa-copy"></i> คัดลอก
+                        </button>
+                        <button id="btnDownload" class="min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-800 text-slate-200 border border-slate-700 transition-all flex items-center gap-1.5 active:scale-95">
+                            <i class="fa-solid fa-download"></i> โหลด .txt
+                        </button>
+                        <div class="hidden sm:block h-4 w-px bg-slate-800 mx-0.5"></div>
+                        <div class="flex items-center gap-1">
+                            <button id="btnUpper" class="min-h-[36px] min-w-[34px] px-2 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 active:scale-95" title="ตัวพิมพ์ใหญ่ทั้งหมด">AA</button>
+                            <button id="btnLower" class="min-h-[36px] min-w-[34px] px-2 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 active:scale-95" title="ตัวพิมพ์เล็กทั้งหมด">aa</button>
+                            <button id="btnTrim" class="min-h-[36px] px-2 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 active:scale-95" title="ลบช่องว่างส่วนเกิน"><i class="fa-solid fa-compress"></i> ตัดช่องว่าง</button>
+                            <button id="btnClear" class="min-h-[36px] min-w-[34px] px-2.5 py-1.5 text-xs font-medium rounded-lg bg-rose-500/10 hover:bg-rose-500/20 active:bg-rose-500/30 text-rose-400 border border-rose-500/20 active:scale-95" title="ล้างข้อความ"><i class="fa-regular fa-trash-can"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Text Area Display -->
+                <div class="relative flex-grow min-h-[320px] sm:min-h-[420px] flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+                    <div class="bg-slate-950 px-3 sm:px-4 py-2 border-b border-slate-800 flex justify-between items-center text-xs text-slate-400 font-mono">
+                        <span id="outputTitle" class="truncate pr-2"><i class="fa-regular fa-file-code mr-1 text-indigo-400"></i> output.txt</span>
+                        <span id="textCharCount" class="flex-shrink-0 text-[11px] sm:text-xs">0 ตัวอักษร</span>
+                    </div>
+                    <textarea id="textContent" class="w-full flex-grow p-3 sm:p-4 bg-slate-900 text-slate-200 font-mono text-xs sm:text-sm leading-relaxed focus:outline-none resize-none" placeholder="ข้อความที่ถอดได้จะปรากฏที่นี่... สามารถแตะเพื่อพิมพ์ แก้ไข หรือคัดลอกได้ทันที" spellcheck="false"></textarea>
+                </div>
+
+            </div>
+
+            <!-- Right Sidebar: Metadata & Analytics (1 col) -->
+            <div id="detailsPane" class="hidden lg:flex flex-col gap-4">
+                
+                <!-- File List / Information Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-4 shadow-md">
+                    <h3 class="text-sm font-semibold text-slate-200 border-b border-slate-800 pb-2 mb-3 flex items-center justify-between">
+                        <span class="flex items-center gap-2"><i class="fa-solid fa-folder-open text-indigo-400"></i> รายการไฟล์ที่ถอดข้อมูล</span>
+                        <span id="fileCountBadge" class="text-[10px] sm:text-[11px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30">0 ไฟล์</span>
+                    </h3>
+                    <div id="fileListContainer" class="max-h-48 sm:max-h-56 overflow-y-auto space-y-2 text-xs pr-1">
+                        <p class="text-slate-500 text-center py-4">ยังไม่ได้เลือกไฟล์</p>
+                    </div>
+                </div>
+
+                <!-- Text Statistics Card -->
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 sm:p-4 shadow-md flex-grow">
+                    <h3 class="text-sm font-semibold text-slate-200 border-b border-slate-800 pb-2 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-indigo-400"></i> สถิติข้อความ
+                    </h3>
+                    
+                    <div class="grid grid-cols-2 gap-2 sm:gap-3 mb-3">
+                        <div class="bg-slate-950 p-2.5 sm:p-3 rounded-lg border border-slate-800/80">
+                            <div class="text-slate-400 text-[10px] sm:text-[11px]">จำนวนคำ</div>
+                            <div id="statWords" class="text-lg sm:text-xl font-bold text-indigo-400 mt-0.5">0</div>
+                        </div>
+                        <div class="bg-slate-950 p-2.5 sm:p-3 rounded-lg border border-slate-800/80">
+                            <div class="text-slate-400 text-[10px] sm:text-[11px]">ตัวอักษร (รวมเว้นวรรค)</div>
+                            <div id="statChars" class="text-lg sm:text-xl font-bold text-sky-400 mt-0.5">0</div>
+                        </div>
+                        <div class="bg-slate-950 p-2.5 sm:p-3 rounded-lg border border-slate-800/80">
+                            <div class="text-slate-400 text-[10px] sm:text-[11px]">ตัวอักษร (ไม่รวมวรรค)</div>
+                            <div id="statCharsNoSpace" class="text-lg sm:text-xl font-bold text-emerald-400 mt-0.5">0</div>
+                        </div>
+                        <div class="bg-slate-950 p-2.5 sm:p-3 rounded-lg border border-slate-800/80">
+                            <div class="text-slate-400 text-[10px] sm:text-[11px]">จำนวนบรรทัด</div>
+                            <div id="statLines" class="text-lg sm:text-xl font-bold text-purple-400 mt-0.5">0</div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5 sm:space-y-2 text-xs border-t border-slate-800 pt-3">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400"><i class="fa-regular fa-clock mr-1"></i>เวลาอ่านประมาณ:</span>
+                            <span id="statReadingTime" class="text-slate-200 font-medium">0 นาที</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400"><i class="fa-solid fa-language mr-1"></i>อักษรไทย:</span>
+                            <span id="statThaiChars" class="text-slate-200 font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400"><i class="fa-solid fa-font mr-1"></i>อักษรอังกฤษ:</span>
+                            <span id="statEngChars" class="text-slate-200 font-medium">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400"><i class="fa-solid fa-hashtag mr-1"></i>ตัวเลข:</span>
+                            <span id="statDigits" class="text-slate-200 font-medium">0</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-3 sm:py-4 px-4 text-center text-[11px] sm:text-xs text-slate-500">
+        <p>TextExtractor Pro &copy; 2026 - ระบบประมวลผลข้อความปลอดภัย ประมวลผลบน Client-side Browser ทั้งหมด</p>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+            const loader = document.getElementById('loader');
+            const loaderStatus = document.getElementById('loaderStatus');
+            const loaderPercent = document.getElementById('loaderPercent');
+            const progressBar = document.getElementById('progressBar');
+            const textContent = document.getElementById('textContent');
+            const outputTitle = document.getElementById('outputTitle');
+            const chkIncludeHeader = document.getElementById('chkIncludeHeader');
+            
+            // Mobile Tabs
+            const tabBtnEditor = document.getElementById('tabBtnEditor');
+            const tabBtnDetails = document.getElementById('tabBtnDetails');
+            const editorPane = document.getElementById('editorPane');
+            const detailsPane = document.getElementById('detailsPane');
+
+            // Confirmation Modal Elements
+            const confirmModal = document.getElementById('confirmModal');
+            const modalBox = document.getElementById('modalBox');
+            const modalBtnCancel = document.getElementById('modalBtnCancel');
+            const modalBtnConfirm = document.getElementById('modalBtnConfirm');
+
+            // Buttons
+            const btnCopy = document.getElementById('btnCopy');
+            const btnDownload = document.getElementById('btnDownload');
+            const btnUpper = document.getElementById('btnUpper');
+            const btnLower = document.getElementById('btnLower');
+            const btnTrim = document.getElementById('btnTrim');
+            const btnClear = document.getElementById('btnClear');
+            const searchInput = document.getElementById('searchInput');
+
+            // Metadata & Stats
+            const statWords = document.getElementById('statWords');
+            const statChars = document.getElementById('statChars');
+            const statCharsNoSpace = document.getElementById('statCharsNoSpace');
+            const statLines = document.getElementById('statLines');
+            const statReadingTime = document.getElementById('statReadingTime');
+            const statThaiChars = document.getElementById('statThaiChars');
+            const statEngChars = document.getElementById('statEngChars');
+            const statDigits = document.getElementById('statDigits');
+            const textCharCount = document.getElementById('textCharCount');
+
+            let currentFilesCount = 0;
+
+            // Mobile Tab Switcher Logic
+            if (tabBtnEditor && tabBtnDetails) {
+                tabBtnEditor.addEventListener('click', () => {
+                    tabBtnEditor.className = "flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-indigo-600 text-white transition-all flex items-center justify-center gap-1.5 shadow-sm";
+                    tabBtnDetails.className = "flex-1 py-2 px-3 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center gap-1.5";
+                    editorPane.classList.remove('hidden');
+                    detailsPane.classList.add('hidden');
+                });
+
+                tabBtnDetails.addEventListener('click', () => {
+                    tabBtnDetails.className = "flex-1 py-2 px-3 text-xs font-medium rounded-lg bg-indigo-600 text-white transition-all flex items-center justify-center gap-1.5 shadow-sm";
+                    tabBtnEditor.className = "flex-1 py-2 px-3 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center gap-1.5";
+                    editorPane.classList.add('hidden');
+                    detailsPane.classList.remove('hidden');
+                });
+            }
+
+            // Custom Modal Handlers (Replacing native confirm)
+            function showConfirmModal(callback) {
+                confirmModal.classList.remove('hidden');
+                setTimeout(() => {
+                    modalBox.classList.remove('scale-95');
+                    modalBox.classList.add('scale-100');
+                }, 10);
+
+                const handleConfirm = () => {
+                    cleanup();
+                    callback(true);
+                };
+
+                const handleCancel = () => {
+                    cleanup();
+                    callback(false);
+                };
+
+                const cleanup = () => {
+                    modalBox.classList.add('scale-95');
+                    modalBox.classList.remove('scale-100');
+                    setTimeout(() => {
+                        confirmModal.classList.add('hidden');
+                    }, 150);
+                    modalBtnConfirm.removeEventListener('click', handleConfirm);
+                    modalBtnCancel.removeEventListener('click', handleCancel);
+                };
+
+                modalBtnConfirm.addEventListener('click', handleConfirm);
+                modalBtnCancel.addEventListener('click', handleCancel);
+            }
+
+            // Setup PDF.js worker
+            if (window.pdfjsLib) {
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+
+            // Drag & Drop Handlers
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('drag-active');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('drag-active');
+                }, false);
+            });
+
+            dropzone.addEventListener('click', () => fileInput.click());
+
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    handleFilesSelect(files);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                    handleFilesSelect(e.target.files);
+                }
+            });
+
+            // Process Multiple Files and combine output
+            async function handleFilesSelect(files) {
+                if (!files || files.length === 0) return;
+
+                const fileArray = Array.from(files);
+                const totalFiles = fileArray.length;
+                const includeHeader = chkIncludeHeader ? chkIncludeHeader.checked : true;
+
+                showLoader(true, `เริ่มอ่าน ${totalFiles} ไฟล์...`, 0);
+
+                let combinedText = "";
+                let uploadedFileList = [];
+
+                for (let idx = 0; idx < totalFiles; idx++) {
+                    const file = fileArray[idx];
+                    const basePercent = Math.round((idx / totalFiles) * 100);
+                    updateProgress(`[${idx + 1}/${totalFiles}] ${file.name}`, basePercent);
+
+                    try {
+                        const ext = file.name.split('.').pop().toLowerCase();
+                        let extractedText = "";
+
+                        if (['txt', 'md', 'csv', 'json', 'html', 'css', 'js', 'py', 'xml'].includes(ext)) {
+                            extractedText = await readPlainText(file);
+                        } else if (ext === 'pdf') {
+                            extractedText = await extractPdfText(file);
+                        } else if (ext === 'docx') {
+                            extractedText = await extractDocxText(file);
+                        } else if (['png', 'jpg', 'jpeg', 'webp', 'bmp'].includes(ext)) {
+                            extractedText = await extractImageOcr(file);
+                        } else {
+                            extractedText = await readPlainText(file);
+                        }
+
+                        // Format Section Header for each file
+                        let formattedText = "";
+                        if (includeHeader) {
+                            const separator = "=".repeat(50);
+                            formattedText = `${separator}\n📁 [ไฟล์ที่ ${idx + 1}/${totalFiles}]: ${file.name}\n${separator}\n\n${extractedText.trim()}\n\n\n`;
+                        } else {
+                            formattedText = `${extractedText.trim()}\n\n`;
+                        }
+
+                        combinedText += formattedText;
+
+                        uploadedFileList.push({
+                            name: file.name,
+                            size: formatBytes(file.size),
+                            type: ext.toUpperCase(),
+                            status: 'success'
+                        });
+
+                    } catch (err) {
+                        console.error(`Error processing file ${file.name}:`, err);
+                        uploadedFileList.push({
+                            name: file.name,
+                            size: formatBytes(file.size),
+                            type: file.name.split('.').pop().toUpperCase(),
+                            status: 'error'
+                        });
+                        showToast(`ไม่สามารถอ่าน ${file.name}: ${err.message}`, "error");
+                    }
+                }
+
+                currentFilesCount = uploadedFileList.length;
+                textContent.value = combinedText;
+                outputTitle.innerHTML = `<i class="fa-regular fa-file-lines mr-1 text-indigo-400"></i> รวม ${currentFilesCount} ไฟล์`;
+                
+                updateTextStats(combinedText);
+                updateFileListUI(uploadedFileList);
+                showLoader(false);
+
+                // Switch back to editor view on mobile after extraction
+                if (window.innerWidth < 1024 && tabBtnEditor) {
+                    tabBtnEditor.click();
+                }
+
+                if (uploadedFileList.length > 0) {
+                    showToast(`ถอดข้อความสำเร็จจาก ${uploadedFileList.length} ไฟล์!`, "success");
+                }
+            }
+
+            // Update UI list for uploaded files
+            function updateFileListUI(files) {
+                const container = document.getElementById('fileListContainer');
+                const badge = document.getElementById('fileCountBadge');
+                
+                badge.textContent = `${files.length} ไฟล์`;
+
+                if (files.length === 0) {
+                    container.innerHTML = `<p class="text-slate-500 text-center py-4">ยังไม่ได้เลือกไฟล์</p>`;
+                    return;
+                }
+
+                container.innerHTML = files.map((f, i) => `
+                    <div class="p-2 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between gap-2 shadow-sm">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded ${f.status === 'success' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">${f.type}</span>
+                            <span class="text-slate-200 font-medium truncate text-xs" title="${f.name}">${i + 1}. ${f.name}</span>
+                        </div>
+                        <span class="text-[10px] text-slate-400 whitespace-nowrap">${f.size}</span>
+                    </div>
+                `).join('');
+            }
+
+            // Read Plain Text Files
+            function readPlainText(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onprogress = (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            updateProgress("กำลังอ่านไฟล์ข้อความ...", percent);
+                        }
+                    };
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(new Error("ไม่สามารถอ่านไฟล์ได้"));
+                    reader.readAsText(file);
+                });
+            }
+
+            // PDF Text Extraction using PDF.js
+            async function extractPdfText(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const totalPages = pdf.numPages;
+                let fullText = "";
+
+                for (let i = 1; i <= totalPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += `--- หน้า ${i} ---\n` + pageText + "\n\n";
+                    
+                    const percent = Math.round((i / totalPages) * 100);
+                    updateProgress(`PDF (หน้า ${i}/${totalPages})...`, percent);
+                }
+
+                return fullText;
+            }
+
+            // DOCX Text Extraction using Mammoth.js
+            async function extractDocxText(file) {
+                updateProgress("กำลังอ่าน Word (.docx)...", 30);
+                const arrayBuffer = await file.arrayBuffer();
+                updateProgress("กำลังแปลงข้อความ...", 70);
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                updateProgress("เสร็จสิ้น!", 100);
+                return result.value;
+            }
+
+            // Image OCR using Tesseract.js
+            async function extractImageOcr(file) {
+                if (!window.Tesseract) {
+                    throw new Error("ไม่พบระบบ OCR");
+                }
+
+                const worker = await Tesseract.createWorker('tha+eng');
+                updateProgress("กำลังเตรียม OCR (ไทย/อังกฤษ)...", 20);
+
+                const ret = await worker.recognize(file, {}, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round((m.progress || 0) * 100);
+                            updateProgress(`OCR กำลังสแกน... (${pct}%)`, pct);
+                        }
+                    }
+                });
+
+                await worker.terminate();
+                return ret.data.text;
+            }
+
+            // Update Text Statistics Panel
+            function updateTextStats(text) {
+                const chars = text.length;
+                const charsNoSpace = text.replace(/\s/g, '').length;
+                
+                const wordsArr = text.trim().split(/\s+/).filter(w => w.length > 0);
+                const words = wordsArr.length;
+
+                const lines = text ? text.split(/\r\n|\r|\n/).length : 0;
+                
+                const thaiCount = (text.match(/[\u0E00-\u0E7F]/g) || []).length;
+                const engCount = (text.match(/[a-zA-Z]/g) || []).length;
+                const digitCount = (text.match(/[0-9]/g) || []).length;
+
+                const readingMinutes = Math.ceil(words / 150) || 0;
+
+                statWords.textContent = words.toLocaleString();
+                statChars.textContent = chars.toLocaleString();
+                statCharsNoSpace.textContent = charsNoSpace.toLocaleString();
+                statLines.textContent = lines.toLocaleString();
+                statReadingTime.textContent = `${readingMinutes} นาที`;
+                statThaiChars.textContent = thaiCount.toLocaleString();
+                statEngChars.textContent = engCount.toLocaleString();
+                statDigits.textContent = digitCount.toLocaleString();
+                textCharCount.textContent = `${chars.toLocaleString()} ตัวอักษร`;
+            }
+
+            // Text Manipulation Actions
+            textContent.addEventListener('input', () => {
+                updateTextStats(textContent.value);
+            });
+
+            btnUpper.addEventListener('click', () => {
+                textContent.value = textContent.value.toUpperCase();
+                updateTextStats(textContent.value);
+                showToast("แปลงเป็นตัวพิมพ์ใหญ่แล้ว", "info");
+            });
+
+            btnLower.addEventListener('click', () => {
+                textContent.value = textContent.value.toLowerCase();
+                updateTextStats(textContent.value);
+                showToast("แปลงเป็นตัวพิมพ์เล็กแล้ว", "info");
+            });
+
+            btnTrim.addEventListener('click', () => {
+                textContent.value = textContent.value
+                    .replace(/[ \t]+/g, ' ')
+                    .replace(/^\s+|\s+$/gm, '');
+                updateTextStats(textContent.value);
+                showToast("ลบช่องว่างส่วนเกินเรียบร้อย", "info");
+            });
+
+            // Replaced native confirm() with Custom Modal
+            btnClear.addEventListener('click', () => {
+                if (!textContent.value.trim()) {
+                    showToast("ไม่มีข้อความให้ลบ", "warning");
+                    return;
+                }
+                showConfirmModal((confirmed) => {
+                    if (confirmed) {
+                        textContent.value = '';
+                        updateTextStats('');
+                        showToast("ล้างข้อความเรียบร้อย", "info");
+                    }
+                });
+            });
+
+            // Copy to Clipboard (Safe execCommand fallback)
+            btnCopy.addEventListener('click', () => {
+                if (!textContent.value) {
+                    showToast("ไม่มีข้อความให้คัดลอก", "warning");
+                    return;
+                }
+                textContent.select();
+                try {
+                    document.execCommand('copy');
+                    showToast("คัดลอกข้อความแล้ว!", "success");
+                } catch (e) {
+                    showToast("ไม่สามารถคัดลอกข้อความได้", "error");
+                }
+            });
+
+            // Download Text File
+            btnDownload.addEventListener('click', () => {
+                const text = textContent.value;
+                if (!text) {
+                    showToast("ไม่มีข้อความให้ดาวน์โหลด", "warning");
+                    return;
+                }
+                const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `extracted_text_${Date.now()}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast("เริ่มดาวน์โหลดไฟล์แล้ว", "success");
+            });
+
+            // Search Filter Highlight
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value;
+                if (!query) return;
+                const index = textContent.value.toLowerCase().indexOf(query.toLowerCase());
+                if (index !== -1) {
+                    textContent.focus();
+                    textContent.setSelectionRange(index, index + query.length);
+                }
+            });
+
+            // Helper Functions
+            function showLoader(show, statusText = "", percent = 0) {
+                if (show) {
+                    loader.classList.remove('hidden');
+                } else {
+                    loader.classList.add('hidden');
+                }
+                updateProgress(statusText, percent);
+            }
+
+            function updateProgress(statusText, percent) {
+                if (statusText) loaderStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusText}`;
+                loaderPercent.textContent = `${percent}%`;
+                progressBar.style.width = `${percent}%`;
+            }
+
+            function formatBytes(bytes, decimals = 1) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const dm = decimals < 0 ? 0 : decimals;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+            }
+
+            // Custom Toast Notification (Responsive for mobile)
+            function showToast(message, type = "info") {
+                const toastContainer = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                
+                let icon = 'fa-info-circle';
+                let borderBg = 'border-indigo-500 bg-slate-900 text-indigo-200';
+                
+                if (type === 'success') {
+                    icon = 'fa-check-circle';
+                    borderBg = 'border-emerald-500 bg-slate-900 text-emerald-200';
+                } else if (type === 'error') {
+                    icon = 'fa-exclamation-circle';
+                    borderBg = 'border-rose-500 bg-slate-900 text-rose-200';
+                } else if (type === 'warning') {
+                    icon = 'fa-triangle-exclamation';
+                    borderBg = 'border-amber-500 bg-slate-900 text-amber-200';
+                }
+
+                toast.className = `pointer-events-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border shadow-xl text-xs transition-all duration-300 transform -translate-y-2 opacity-0 sm:translate-x-full sm:translate-y-0 ${borderBg}`;
+                toast.innerHTML = `<i class="fa-solid ${icon} text-sm flex-shrink-0"></i> <span class="truncate">${message}</span>`;
+
+                toastContainer.appendChild(toast);
+
+                // Animate in
+                setTimeout(() => {
+                    toast.classList.remove('-translate-y-2', 'sm:translate-x-full', 'opacity-0');
+                }, 10);
+
+                // Auto remove
+                setTimeout(() => {
+                    toast.classList.add('opacity-0', '-translate-y-2', 'sm:translate-x-full');
+                    setTimeout(() => toast.remove(), 300);
+                }, 3500);
+            }
+        });
+    </script>
+</body>
+</html>
